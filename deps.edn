@@ -1,1 +1,3 @@
-{}
+{:paths ["src"]
+ :aliases {:test {:extra-paths ["test"]}
+           :cljs {:extra-deps {org.clojure/clojurescript {:mvn/version "1.12.116"}}}}}

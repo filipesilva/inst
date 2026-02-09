@@ -1,0 +1,7 @@
+{:tasks
+ {test:clj  (shell "nvk test")
+  test:bb   (shell "nvk --dialect bb test")
+  test:cljs (shell "clj -M:test:cljs -m cljs.main -t node -m filipesilva.inst-test")
+  test      (do (run 'test:clj)
+                (run 'test:bb)
+                (run 'test:cljs))}}
