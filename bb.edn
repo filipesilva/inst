@@ -1,6 +1,9 @@
-{:tasks
- {test:clj  (shell "nvk test")
-  test:bb   (shell "nvk --dialect bb test")
+{:deps {io.github.filipesilva/invoker {:git/tag "v0.4.7" :git/sha "2d77d"}}
+ :tasks
+ {nvk       {:requires ([invoker.nvk :as nvk])
+             :task (apply nvk/-main *command-line-args*)}
+  test:clj  (shell "bb nvk test")
+  test:bb   (shell "bb nvk --dialect bb test")
   test:cljs (shell "clj -M:test:cljs -m cljs.main -t node -m filipesilva.inst-test")
   test      (do (run 'test:clj)
                 (run 'test:bb)
