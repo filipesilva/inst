@@ -301,7 +301,7 @@
   (add-platform inst n unit))
 
 (defn -
-  "Subtracts n units from inst."
+  "Subtracts n units from inst. Units: :millis :seconds :minutes :hours :days :weeks :months :years"
   [inst n unit]
   (+ inst (clojure.core/- n) unit))
 
