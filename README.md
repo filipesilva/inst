@@ -19,9 +19,9 @@ Works in Clojure, ClojureScript, and Babashka. No dependencies.
 
 ;; create from string, ms, existing inst, or no args for now
 (def t (inst/inst "2018-03-28T10:48:00.000-08:00"))
-(inst/inst)
 (inst/inst 1522195200000)
 (inst/inst #inst "2018-03-28")
+(inst/inst)
 
 ;; add and subtract
 ;; units: :millis :seconds :minutes :hours :days :weeks :months :years
