@@ -7,7 +7,7 @@
                     [java.time ZoneOffset ZonedDateTime YearMonth])))
 
 ;; ---------------------------------------------------------------------------
-;; Platform layer (private)
+;; Platform layer
 ;; ---------------------------------------------------------------------------
 
 (defn- from-ms [ms]
@@ -114,7 +114,7 @@
      :cljs (.getUTCDate (js/Date. (js/Date.UTC year month 0)))))
 
 ;; ---------------------------------------------------------------------------
-;; Cron parsing (pure)
+;; Cron parsing
 ;; ---------------------------------------------------------------------------
 
 (defn- parse-field
@@ -266,16 +266,21 @@
             (recur (assoc c :hour (dec hour) :minute 59)
                    :hour)))))))
 
-;; ---------------------------------------------------------------------------
-;; Timezone offset parsing
-;; ---------------------------------------------------------------------------
-
 (defn- parse-offset
   "Parses '+05:30' or '-08:00' into minutes from UTC."
   [tz]
   (let [[_ sign h m] (re-matches #"([+-])(\d{2}):(\d{2})" tz)
         total (clojure.core/+ (* (parse-long h) 60) (parse-long m))]
     (if (= sign "-") (clojure.core/- total) total)))
+
+(defn- find-cron [inst cron-str tz direction]
+  (let [cron   (parse-cron cron-str)
+        offset (parse-offset tz)
+        [step find-fn] (case direction :next [1 find-next] :previous [-1 find-prev])
+        start  (components (add-platform inst step :minutes) offset)
+        result (find-fn cron start 4)]
+    (when result
+      (from-components result offset))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API
@@ -306,20 +311,7 @@
   ([inst cron-str]
    (next inst cron-str "+00:00"))
   ([inst cron-str tz]
-   (let [cron   (parse-cron cron-str)
-         offset (parse-offset tz)
-         comps  (components inst offset)
-         ;; Start from the next minute
-         start  (let [c (update comps :minute inc)]
-                  (if (>= (:minute c) 60)
-                    (let [c (assoc c :minute 0 :hour (inc (:hour c)))]
-                      (if (>= (:hour c) 24)
-                        (assoc c :hour 0 :day (inc (:day c)))
-                        c))
-                    c))
-         result (find-next cron start 4)]
-     (when result
-       (from-components result offset)))))
+   (find-cron inst cron-str tz :next)))
 
 (defn previous
   "Returns the previous #inst matching the cron expression before the given inst.
@@ -327,17 +319,4 @@
   ([inst cron-str]
    (previous inst cron-str "+00:00"))
   ([inst cron-str tz]
-   (let [cron   (parse-cron cron-str)
-         offset (parse-offset tz)
-         comps  (components inst offset)
-         ;; Start from the previous minute
-         start  (let [c (update comps :minute dec)]
-                  (if (neg? (:minute c))
-                    (let [c (assoc c :minute 59 :hour (dec (:hour c)))]
-                      (if (neg? (:hour c))
-                        (assoc c :hour 23 :day (dec (:day c)))
-                        c))
-                    c))
-         result (find-prev cron start 4)]
-     (when result
-       (from-components result offset)))))
+   (find-cron inst cron-str tz :previous)))
