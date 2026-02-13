@@ -1,6 +1,8 @@
 (ns filipesilva.inst
   (:refer-clojure :exclude [+ - next])
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            #?(:clj  [clojure.instant]
+               :cljs [cljs.tagged-literals]))
   #?(:clj (:import [java.util Date]
                     [java.time ZoneOffset ZonedDateTime YearMonth])))
 
@@ -14,13 +16,7 @@
 
 (defn- from-string [s]
   #?(:clj  (clojure.instant/read-instant-date s)
-     :cljs (let [;; #inst treats missing tz as UTC; JS treats time-only strings as local.
-                 ;; Append Z to strings with time but no offset to match #inst behavior.
-                 s (if (and (str/includes? s "T")
-                            (not (re-find #"[Zz]$|[+\-]\d{2}:\d{2}$" s)))
-                     (str s "Z")
-                     s)]
-             (js/Date. s))))
+     :cljs (cljs.tagged-literals/read-inst s)))
 
 (defn- now-ms []
   #?(:clj  (System/currentTimeMillis)
@@ -127,31 +123,24 @@
   (let [expand (fn [lo hi step] (range lo (inc hi) step))
         parse-atom
         (fn [part]
-          (cond
-            (= part "*")
+          (if (= part "*")
             (expand min-val max-val 1)
-
-            (re-matches #"\*/(\d+)" part)
-            (let [[_ step] (re-matches #"\*/(\d+)" part)]
-              (expand min-val max-val (parse-long step)))
-
-            (re-matches #"(\d+)-(\d+)/(\d+)" part)
-            (let [[_ lo hi step] (re-matches #"(\d+)-(\d+)/(\d+)" part)]
-              (expand (parse-long lo) (parse-long hi) (parse-long step)))
-
-            (re-matches #"(\d+)-(\d+)" part)
-            (let [[_ lo hi] (re-matches #"(\d+)-(\d+)" part)]
-              (expand (parse-long lo) (parse-long hi) 1))
-
-            :else
-            [(parse-long part)]))]
+            (let [[_ a b c] (re-matches #"(\*|\d+)(?:-(\d+))?(?:/(\d+))?" part)]
+              (cond
+                c (expand (if (= a "*") min-val (parse-long a))
+                          (if b (parse-long b) max-val)
+                          (parse-long c))
+                b (expand (parse-long a) (parse-long b) 1)
+                :else [(parse-long a)]))))]
     (into (sorted-set) (mapcat parse-atom (str/split s #",")))))
 
 (defn- parse-cron
   "Parses a 5-field cron string."
   [cron-str]
   (let [fields (str/split (str/trim cron-str) #"\s+")
-        _      (assert (= 5 (count fields)) (str "cron must have 5 fields: " cron-str))
+        _      (when-not (= 5 (count fields))
+                 (throw (ex-info (str "cron must have 5 fields: " cron-str)
+                                 {:cron cron-str :fields fields})))
         [mi h dom mon dow] fields]
     {:minutes   (parse-field mi  0 59)
      :hours     (parse-field h   0 23)
@@ -163,6 +152,10 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Cron search
+;;
+;; Descends through fields (month → day → hour → minute), seeking the next/prev
+;; valid value at each level. When a field has no valid value, it bumps the
+;; parent and restarts from that level.
 ;; ---------------------------------------------------------------------------
 
 (defn- next-in-set
@@ -194,77 +187,84 @@
 (defn- find-next
   "Finds next matching time from components. Returns components or nil."
   [cron comps year-limit]
-  (let [{:keys [minutes hours]} cron
+  (let [{:keys [minutes hours months]} cron
         max-year (clojure.core/+ (:year comps) year-limit)]
-    (loop [{:keys [year month day hour minute] :as c} comps]
+    (loop [{:keys [year month day hour] :as c} comps
+           field :month]
       (when (<= year max-year)
-        (if-let [m (next-in-set (:months cron) month)]
-          (let [c (if (> m month) (assoc c :month m :day 1 :hour 0 :minute 0) c)
-                {:keys [month day]} c
-                max-d (dim (:year c) (:month c))
-                next-day (loop [d day]
-                           (when (<= d max-d)
-                             (if (valid-day? cron c d) d (recur (inc d)))))]
-            (if next-day
-              (let [c (if (> next-day (:day c))
-                        (assoc c :day next-day :hour 0 :minute 0)
-                        (assoc c :day next-day))]
-                (if-let [h (next-in-set hours (:hour c))]
-                  (let [c (if (> h (:hour c)) (assoc c :hour h :minute 0) c)]
-                    (if-let [mi (next-in-set minutes (:minute c))]
-                      (assoc c :minute mi)
-                      ;; minute wrapped — try next hour
-                      (if-let [nh (next-in-set hours (inc (:hour c)))]
-                        (recur (assoc c :hour nh :minute 0))
-                        ;; hour wrapped — next day
-                        (recur (assoc c :day (inc (:day c)) :hour 0 :minute 0)))))
-                  ;; hour wrapped — next day
-                  (recur (assoc c :day (inc (:day c)) :hour 0 :minute 0))))
-              ;; day wrapped — next month
-              (if-let [nm (next-in-set (:months cron) (inc month))]
-                (recur (assoc c :month nm :day 1 :hour 0 :minute 0))
-                (recur (assoc c :year (inc year) :month 1 :day 1 :hour 0 :minute 0)))))
-          ;; month wrapped — next year
-          (recur (assoc c :year (inc year) :month 1 :day 1 :hour 0 :minute 0)))))))
+        (case field
+          :month
+          (if-let [m (next-in-set months month)]
+            (recur (if (> m month) (assoc c :month m :day 1 :hour 0 :minute 0) c)
+                   :day)
+            (recur (assoc c :year (inc year) :month 1 :day 1 :hour 0 :minute 0)
+                   :month))
+
+          :day
+          (let [max-d (dim year month)
+                d (loop [d day]
+                    (when (<= d max-d)
+                      (if (valid-day? cron c d) d (recur (inc d)))))]
+            (if d
+              (recur (if (> d day) (assoc c :day d :hour 0 :minute 0) (assoc c :day d))
+                     :hour)
+              (recur (assoc c :month (inc month) :day 1 :hour 0 :minute 0)
+                     :month)))
+
+          :hour
+          (if-let [h (next-in-set hours hour)]
+            (recur (if (> h hour) (assoc c :hour h :minute 0) c)
+                   :minute)
+            (recur (assoc c :day (inc day) :hour 0 :minute 0)
+                   :day))
+
+          :minute
+          (if-let [mi (next-in-set minutes (:minute c))]
+            (assoc c :minute mi)
+            (recur (assoc c :hour (inc hour) :minute 0)
+                   :hour)))))))
 
 (defn- find-prev
   "Finds previous matching time from components. Returns components or nil."
   [cron comps year-limit]
-  (let [{:keys [minutes hours]} cron
+  (let [{:keys [minutes hours months]} cron
         min-year (clojure.core/- (:year comps) year-limit)]
-    (loop [{:keys [year month day hour minute] :as c} comps]
+    (loop [{:keys [year month day hour] :as c} comps
+           field :month]
       (when (>= year min-year)
-        (if-let [m (prev-in-set (:months cron) month)]
-          (let [c (if (< m month)
-                    (let [max-d (dim year m)]
-                      (assoc c :month m :day max-d :hour 23 :minute 59))
-                    c)
-                {:keys [month day]} c
-                prev-day (loop [d day]
-                           (when (>= d 1)
-                             (if (valid-day? cron c d) d (recur (dec d)))))]
-            (if prev-day
-              (let [c (if (< prev-day (:day c))
-                        (assoc c :day prev-day :hour 23 :minute 59)
-                        (assoc c :day prev-day))]
-                (if-let [h (prev-in-set hours (:hour c))]
-                  (let [c (if (< h (:hour c)) (assoc c :hour h :minute 59) c)]
-                    (if-let [mi (prev-in-set minutes (:minute c))]
-                      (assoc c :minute mi)
-                      ;; minute wrapped — try prev hour
-                      (if-let [ph (prev-in-set hours (dec (:hour c)))]
-                        (recur (assoc c :hour ph :minute 59))
-                        ;; hour wrapped — prev day
-                        (recur (assoc c :day (dec (:day c)) :hour 23 :minute 59)))))
-                  ;; hour wrapped — prev day
-                  (recur (assoc c :day (dec (:day c)) :hour 23 :minute 59))))
-              ;; day wrapped — prev month
-              (if-let [pm (prev-in-set (:months cron) (dec month))]
-                (let [max-d (dim year pm)]
-                  (recur (assoc c :month pm :day max-d :hour 23 :minute 59)))
-                (recur (assoc c :year (dec year) :month 12 :day 31 :hour 23 :minute 59)))))
-          ;; month wrapped — prev year
-          (recur (assoc c :year (dec year) :month 12 :day 31 :hour 23 :minute 59)))))))
+        (case field
+          :month
+          (if-let [m (prev-in-set months month)]
+            (recur (if (< m month)
+                     (let [max-d (dim year m)]
+                       (assoc c :month m :day max-d :hour 23 :minute 59))
+                     c)
+                   :day)
+            (recur (assoc c :year (dec year) :month 12 :day 31 :hour 23 :minute 59)
+                   :month))
+
+          :day
+          (let [d (loop [d day]
+                    (when (>= d 1)
+                      (if (valid-day? cron c d) d (recur (dec d)))))]
+            (if d
+              (recur (if (< d day) (assoc c :day d :hour 23 :minute 59) (assoc c :day d))
+                     :hour)
+              (recur (assoc c :month (dec month) :day 31 :hour 23 :minute 59)
+                     :month)))
+
+          :hour
+          (if-let [h (prev-in-set hours hour)]
+            (recur (if (< h hour) (assoc c :hour h :minute 59) c)
+                   :minute)
+            (recur (assoc c :day (dec day) :hour 23 :minute 59)
+                   :day))
+
+          :minute
+          (if-let [mi (prev-in-set minutes (:minute c))]
+            (assoc c :minute mi)
+            (recur (assoc c :hour (dec hour) :minute 59)
+                   :hour)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Timezone offset parsing

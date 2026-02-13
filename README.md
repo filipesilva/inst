@@ -47,5 +47,14 @@ Works in Clojure, ClojureScript, and Babashka, and has no dependencies.
 (inst/next t "0 0 * * 2")              ; next Tuesday midnight
 (inst/next t "0 0 * * 2" "-08:00")     ; with timezone
 (inst/previous t "0 0 * * 2")          ; previous Tuesday midnight
+
+;; lazy seq of next values
+(->> t
+     (iterate #(inst/next % "0 0 * * 2"))
+     (take 4))
+;; => (#inst "2018-03-28T18:48:00.000-00:00"  ; t
+;;     #inst "2018-04-03T00:00:00.000-00:00"
+;;     #inst "2018-04-10T00:00:00.000-00:00"
+;;     #inst "2018-04-17T00:00:00.000-00:00")
 ```
 

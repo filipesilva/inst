@@ -235,6 +235,52 @@
         prv (inst/previous t "0 0 29 2 *")]
     (is (= (inst-ms prv) (inst-ms #inst "2020-02-29T00:00:00.000")))))
 
+;; ---------------------------------------------------------------------------
+;; Cron / parse features
+;; ---------------------------------------------------------------------------
+
+(deftest next-comma-list
+  ;; "0,30 * * * *" = on the hour and half hour
+  ;; At 10:20, next should be 10:30
+  (let [t   (inst/inst "2018-03-28T10:20:00.000")
+        nxt (inst/next t "0,30 * * * *")]
+    (is (= (inst-ms nxt) (inst-ms #inst "2018-03-28T10:30:00.000")))))
+
+(deftest next-range-with-step
+  ;; "0-30/10 * * * *" = minutes 0, 10, 20, 30
+  ;; At 10:15, next should be 10:20
+  (let [t   (inst/inst "2018-03-28T10:15:00.000")
+        nxt (inst/next t "0-30/10 * * * *")]
+    (is (= (inst-ms nxt) (inst-ms #inst "2018-03-28T10:20:00.000")))))
+
+(deftest next-dom-and-dow-or
+  ;; When both day-of-month and day-of-week are specified, either should match.
+  ;; "0 0 15 * 2" = the 15th of the month OR any Tuesday
+  ;; 2018-03-28 is a Wednesday. Next match: Tuesday April 3 or March 15 (past).
+  ;; The next Tuesday is April 3, and the next 15th is April 15.
+  ;; April 3 comes first.
+  (let [t   (inst/inst "2018-03-28T10:00:00.000")
+        nxt (inst/next t "0 0 15 * 2")]
+    (is (= (inst-ms nxt) (inst-ms #inst "2018-04-03T00:00:00.000")))))
+
+(deftest next-lazy-seq
+  ;; same t as README
+  (let [t      (inst/inst "2018-03-28T10:48:00.000-08:00")
+        cron   "0 0 * * 2"
+        tues   (->> t
+                    (iterate #(inst/next % cron))
+                    (take 4))]
+    (is (= (mapv inst-ms tues)
+           (mapv inst-ms [#inst "2018-03-28T18:48:00.000"
+                          #inst "2018-04-03T00:00:00.000"
+                          #inst "2018-04-10T00:00:00.000"
+                          #inst "2018-04-17T00:00:00.000"])))))
+
+(deftest next-impossible-cron-returns-nil
+  ;; Feb 31 never exists, should return nil
+  (let [t (inst/inst "2018-03-28T10:00:00.000")]
+    (is (nil? (inst/next t "0 0 31 2 *")))))
+
 #?(:cljs
    (do
      (defmethod t/report [:cljs.test/default :end-run-tests] [m]
