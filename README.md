@@ -9,7 +9,7 @@ Works in Clojure, ClojureScript, and Babashka. No dependencies.
 
 ``` clojure
 ;; deps.edn
-{:deps {io.github.filipesilva/inst {:git/tag "v1.0.0" :git/sha "4f38a29"}}}
+{:deps {io.github.filipesilva/inst {:git/tag "v1.0.1" :git/sha "5843e31"}}}
 ```
 
 ## Usage
