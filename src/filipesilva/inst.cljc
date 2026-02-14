@@ -307,7 +307,21 @@
 
 (defn next
   "Returns the next #inst matching the cron expression after the given inst.
-   Optional offset is a string like '-08:00' (default UTC)."
+  Optional offset is a string like '-08:00' (default UTC).
+
+  Cron reference:
+  * * * * *
+  | | | | |
+  | | | | day of the week (0–6) (Sunday to Saturday)
+  | | | month (1–12)
+  | | day of the month (1–31)
+  | hour (0–23)
+  minute (0–59)
+
+  * any value
+  , value list separator
+  - range of values
+  / step values"
   ([inst cron-str]
    (next inst cron-str "+00:00"))
   ([inst cron-str offset]
@@ -315,7 +329,21 @@
 
 (defn previous
   "Returns the previous #inst matching the cron expression before the given inst.
-   Optional offset is a string like '-08:00' (default UTC)."
+  Optional offset is a string like '-08:00' (default UTC).
+
+  Cron reference:
+  * * * * *
+  | | | | |
+  | | | | day of the week (0–6) (Sunday to Saturday)
+  | | | month (1–12)
+  | | day of the month (1–31)
+  | hour (0–23)
+  minute (0–59)
+
+  * any value
+  , value list separator
+  - range of values
+  / step values"
   ([inst cron-str]
    (previous inst cron-str "+00:00"))
   ([inst cron-str offset]
