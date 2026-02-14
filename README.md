@@ -23,6 +23,10 @@ Works in Clojure, ClojureScript, and Babashka. No dependencies.
 (inst/inst #inst "2018-03-28")
 (inst/inst)
 
+;; convert to string, round-trips through inst/inst
+(inst/str t)
+(= t (-> t inst/str inst/inst))
+
 ;; add and subtract
 ;; units: :millis :seconds :minutes :hours :days :weeks :months :years
 (inst/+ t 3 :days)

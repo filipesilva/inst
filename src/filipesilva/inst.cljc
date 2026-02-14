@@ -1,5 +1,5 @@
 (ns filipesilva.inst
-  (:refer-clojure :exclude [+ - next])
+  (:refer-clojure :exclude [+ - next str])
   (:require [clojure.string :as str]
             #?(:clj  [clojure.instant]
                :cljs [cljs.tagged-literals]))
@@ -139,7 +139,7 @@
   [cron-str]
   (let [fields (str/split (str/trim cron-str) #"\s+")
         _      (when-not (= 5 (count fields))
-                 (throw (ex-info (str "cron must have 5 fields: " cron-str)
+                 (throw (ex-info (clojure.core/str "cron must have 5 fields: " cron-str)
                                  {:cron cron-str :fields fields})))
         [mi h dom mon dow] fields]
     {:minutes   (parse-field mi  0 59)
@@ -294,6 +294,17 @@
      (string? x) (from-string x)
      (number? x) (from-ms x)
      :else       (from-ms (inst-ms x)))))
+
+(defn str
+  "Returns the inst as an ISO-8601 string that round-trips through inst."
+  [inst]
+  #?(:clj  (let [s (.toString (.toInstant ^Date inst))]
+             ;; Instant.toString omits .000 when millis are zero; normalize to
+             ;; always include them for consistency with JS toISOString.
+             (if (= (count s) 20) ;; "yyyy-MM-ddTHH:mm:ssZ"
+               (clojure.core/str (subs s 0 19) ".000Z")
+               s))
+     :cljs (.toISOString inst)))
 
 (defn +
   "Adds n units to inst. Units: :millis :seconds :minutes :hours :days :weeks :months :years"

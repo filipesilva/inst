@@ -28,6 +28,20 @@
   (is (= (inst-ms (inst/inst 1522195200000))
          (inst-ms #inst "2018-03-28"))))
 
+;; ---------------------------------------------------------------------------
+;; str
+;; ---------------------------------------------------------------------------
+
+(deftest inst-str
+  (t/are [input expected]
+    (= (inst/str (inst/inst input)) expected)
+    "2018-03-28"                    "2018-03-28T00:00:00.000Z"
+    "2018-03-28T10:48:00.000"       "2018-03-28T10:48:00.000Z"
+    "2018-03-28T10:48:00.500"       "2018-03-28T10:48:00.500Z"
+    "2018-03-28T10:48:00.000-08:00" "2018-03-28T18:48:00.000Z")
+  ;; round-trip
+  (let [t (inst/inst "2018-03-28T10:48:00.500")]
+    (is (= t (-> t inst/str inst/inst)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Arithmetic
@@ -136,6 +150,6 @@
    (do
      (defmethod t/report [:cljs.test/default :end-run-tests] [m]
        (when-not (t/successful? m)
-         (.exit js/process 1)))
+         (throw (ex-info "Tests failed" {}))))
      (defn -main []
        (t/run-tests 'filipesilva.inst-test))))
