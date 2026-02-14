@@ -268,14 +268,14 @@
 
 (defn- parse-offset
   "Parses '+05:30' or '-08:00' into minutes from UTC."
-  [tz]
-  (let [[_ sign h m] (re-matches #"([+-])(\d{2}):(\d{2})" tz)
+  [offset]
+  (let [[_ sign h m] (re-matches #"([+-])(\d{2}):(\d{2})" offset)
         total (clojure.core/+ (* (parse-long h) 60) (parse-long m))]
     (if (= sign "-") (clojure.core/- total) total)))
 
-(defn- find-cron [inst cron-str tz direction]
+(defn- find-cron [inst cron-str offset direction]
   (let [cron   (parse-cron cron-str)
-        offset (parse-offset tz)
+        offset (parse-offset offset)
         [step find-fn] (case direction :next [1 find-next] :previous [-1 find-prev])
         start  (components (add-platform inst step :minutes) offset)
         result (find-fn cron start 4)]
@@ -307,16 +307,16 @@
 
 (defn next
   "Returns the next #inst matching the cron expression after the given inst.
-   Optional tz is an offset string like '-08:00' (default UTC)."
+   Optional offset is a string like '-08:00' (default UTC)."
   ([inst cron-str]
    (next inst cron-str "+00:00"))
-  ([inst cron-str tz]
-   (find-cron inst cron-str tz :next)))
+  ([inst cron-str offset]
+   (find-cron inst cron-str offset :next)))
 
 (defn previous
   "Returns the previous #inst matching the cron expression before the given inst.
-   Optional tz is an offset string like '-08:00' (default UTC)."
+   Optional offset is a string like '-08:00' (default UTC)."
   ([inst cron-str]
    (previous inst cron-str "+00:00"))
-  ([inst cron-str tz]
-   (find-cron inst cron-str tz :previous)))
+  ([inst cron-str offset]
+   (find-cron inst cron-str offset :previous)))

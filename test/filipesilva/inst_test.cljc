@@ -89,7 +89,7 @@
     "2018-03-28T10:15:00.000"  "0-30/10 * * * *" "2018-03-28T10:20:00.000"
     ;; dom OR dow: 15th or Tue, Apr 3 (Tue) comes first
     "2018-03-28T10:00:00.000"  "0 0 15 * 2"      "2018-04-03T00:00:00.000")
-  ;; with tz: next Tue midnight -08:00 = 08:00 UTC
+  ;; with offset: next Tue midnight -08:00 = 08:00 UTC
   (is (= (inst-ms (inst/next (inst/inst "2018-03-28T10:48:00.000-08:00") "0 0 * * 2" "-08:00"))
          (inst-ms (inst/inst "2018-04-03T08:00:00.000")))))
 
@@ -111,7 +111,7 @@
     "2019-01-02T10:00:00.000"  "0 0 1 1 *"    "2019-01-01T00:00:00.000"
     ;; leap year: from 2021, prev Feb 29 is 2020
     "2021-03-01T00:00:00.000"  "0 0 29 2 *"   "2020-02-29T00:00:00.000")
-  ;; with tz: prev Tue midnight -08:00 = 08:00 UTC
+  ;; with offset: prev Tue midnight -08:00 = 08:00 UTC
   (is (= (inst-ms (inst/previous (inst/inst "2018-03-28T10:48:00.000-08:00") "0 0 * * 2" "-08:00"))
          (inst-ms (inst/inst "2018-03-27T08:00:00.000")))))
 

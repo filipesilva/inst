@@ -45,7 +45,7 @@ Works in Clojure, ClojureScript, and Babashka. No dependencies.
 ;; - range of values
 ;; / step values
 (inst/next t "0 0 * * 2")              ; next Tuesday midnight
-(inst/next t "0 0 * * 2" "-08:00")     ; with timezone
+(inst/next t "0 0 * * 2" "-08:00")     ; with offset
 (inst/previous t "0 0 * * 2")          ; previous Tuesday midnight
 
 ;; lazy seq of next values
