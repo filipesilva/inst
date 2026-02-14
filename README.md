@@ -1,6 +1,6 @@
 # inst
 
-`inst` is a Clojure time library that always returns a `#inst`.
+`inst` is a small Clojure time library that always returns a `#inst`.
 
 It is meant to complement Clojure's `#inst` reader and `inst?`, `inst-ms` functions.
 Works in Clojure, ClojureScript, and Babashka. No dependencies.
