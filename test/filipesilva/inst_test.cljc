@@ -129,6 +129,74 @@
   (is (= (inst-ms (inst/previous (inst/inst "2018-03-28T10:48:00.000-08:00") "0 0 * * 2" "-08:00"))
          (inst-ms (inst/inst "2018-03-27T08:00:00.000")))))
 
+;; ---------------------------------------------------------------------------
+;; Timezone support
+;; ---------------------------------------------------------------------------
+
+(deftest inst-with-offset
+  ;; 06:00 local in -06:00 = 12:00 UTC
+  (is (= (inst-ms (inst/inst "2024-01-15T06:00" "-06:00"))
+         (inst-ms (inst/inst "2024-01-15T12:00:00.000")))))
+
+(deftest inst-with-timezone
+  ;; Winter: America/Chicago is CST = -06:00, so 06:00 local = 12:00 UTC
+  (is (= (inst-ms (inst/inst "2024-01-15T06:00" "America/Chicago"))
+         (inst-ms (inst/inst "2024-01-15T12:00:00.000"))))
+  ;; Summer: America/Chicago is CDT = -05:00, so 06:00 local = 11:00 UTC
+  (is (= (inst-ms (inst/inst "2024-07-15T06:00" "America/Chicago"))
+         (inst-ms (inst/inst "2024-07-15T11:00:00.000")))))
+
+(deftest str-with-offset
+  (let [noon-utc (inst/inst "2024-01-15T12:00:00.000")]
+    (is (= (inst/str noon-utc "-06:00")
+           "2024-01-15T06:00:00.000-06:00"))))
+
+(deftest str-with-timezone
+  (let [noon-utc (inst/inst "2024-01-15T12:00:00.000")]
+    ;; Winter: CST = -06:00
+    (is (= (inst/str noon-utc "America/Chicago")
+           "2024-01-15T06:00:00.000-06:00")))
+  (let [noon-utc (inst/inst "2024-07-15T12:00:00.000")]
+    ;; Summer: CDT = -05:00
+    (is (= (inst/str noon-utc "America/Chicago")
+           "2024-07-15T07:00:00.000-05:00"))))
+
+(deftest str-timezone-round-trip
+  ;; str with tz → inst should return the same instant
+  (let [t (inst/inst "2024-01-15T12:00:00.000")]
+    (is (= (inst-ms t)
+           (inst-ms (inst/inst (inst/str t "America/Chicago"))))))
+  (let [t (inst/inst "2024-07-15T12:00:00.000")]
+    (is (= (inst-ms t)
+           (inst-ms (inst/inst (inst/str t "America/Chicago")))))))
+
+(deftest cron-next-with-timezone
+  ;; "next 6am in Chicago" is a different UTC hour in winter vs summer
+  (is (= (inst-ms (inst/next (inst/inst "2024-01-14") "0 6 * * *" "America/Chicago"))
+         (inst-ms (inst/inst "2024-01-14T12:00:00.000"))))   ; 6am CST = 12:00 UTC
+  (is (= (inst-ms (inst/next (inst/inst "2024-07-14") "0 6 * * *" "America/Chicago"))
+         (inst-ms (inst/inst "2024-07-14T11:00:00.000"))))   ; 6am CDT = 11:00 UTC
+  ;; on spring-forward day, 2:30am doesn't exist so it resolves to 3:30am CDT
+  (is (= (inst-ms (inst/next (inst/inst "2024-03-10T07:00:00.000Z") "30 2 * * *" "America/Chicago"))
+         (inst-ms (inst/inst "2024-03-10T08:30:00.000")))))
+
+(deftest cron-previous-with-timezone
+  ;; previous 6am Chicago before 6am Chicago = yesterday's 6am
+  (let [winter (inst/previous (inst/inst "2024-01-16T12:00:00.000") "0 6 * * *" "America/Chicago")
+        summer (inst/previous (inst/inst "2024-07-16T11:00:00.000") "0 6 * * *" "America/Chicago")]
+    (is (= (inst-ms winter) (inst-ms (inst/inst "2024-01-15T12:00:00.000"))))
+    (is (= (inst-ms summer) (inst-ms (inst/inst "2024-07-15T11:00:00.000"))))))
+
+(deftest tzs-test
+  (let [tzs (inst/tzs)]
+    (is (seq tzs))
+    (is (some #(= % "America/Chicago") tzs))
+    (is (every? neg? (map compare tzs (rest tzs))))))
+
+;; ---------------------------------------------------------------------------
+;; etc
+;; ---------------------------------------------------------------------------
+
 (deftest next-lazy-seq
   ;; same t as README
   (let [t      (inst/inst "2018-03-28T10:48:00.000-08:00")
